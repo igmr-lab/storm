@@ -182,8 +182,9 @@ def mpc_robot_interactive(args, gym_instance):
     object_pose = gymapi.Transform()
     object_pose.p = gymapi.Vec3(x, y, z)
     object_pose.r = gymapi.Quat(0,0,0, 1)
-    
-    obj_asset_file = "urdf/mug/movable_mug.urdf" 
+
+    obj_asset_file = "urdf/head/movable_head.urdf"
+    # obj_asset_file = "urdf/mug/movable_mug.urdf" 
     obj_asset_root = get_assets_path()
     
     if(vis_ee_target):
@@ -194,11 +195,9 @@ def mpc_robot_interactive(args, gym_instance):
         gym.set_rigid_body_color(env_ptr, target_object, 6, gymapi.MESH_VISUAL_AND_COLLISION, tray_color)
 
 
-        obj_asset_file = "urdf/mug/mug.urdf"
+        obj_asset_file = "urdf/head/head.urdf"
         obj_asset_root = get_assets_path()
-
-
-        ee_handle = world_instance.spawn_object(obj_asset_file, obj_asset_root, object_pose, color=tray_color, name='ee_current_as_mug')
+        ee_handle = world_instance.spawn_object(obj_asset_file, obj_asset_root, object_pose, color=tray_color, name='ee_current_as_head')
         ee_body_handle = gym.get_actor_rigid_body_handle(env_ptr, ee_handle, 0)
         tray_color = gymapi.Vec3(0.0, 0.8, 0.0)
         gym.set_rigid_body_color(env_ptr, ee_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, tray_color)
@@ -283,8 +282,8 @@ def mpc_robot_interactive(args, gym_instance):
             if(vis_ee_target):
                 gym.set_rigid_transform(env_ptr, ee_body_handle, copy.deepcopy(ee_pose))
 
-            print(["{:.3f}".format(x) for x in ee_error], "{:.3f}".format(mpc_control.opt_dt),
-                  "{:.3f}".format(mpc_control.mpc_dt))
+            # print(["{:.3f}".format(x) for x in ee_error], "{:.3f}".format(mpc_control.opt_dt),
+            #       "{:.3f}".format(mpc_control.mpc_dt))
         
             
             gym_instance.clear_lines()
