@@ -232,7 +232,7 @@ def create_dataset(robot_name):
         print(loss.item())
             
 if __name__=='__main__':
-    create_dataset('franka')
+    create_dataset('raoct')
     # load robot model
     
     # load dataset

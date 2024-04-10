@@ -1,0 +1,47 @@
+robot: 'RAOCT'
+
+collision_spheres:
+    base_link_inertia:
+        - "center": [0.0, 0.0, 0.0]
+          "radius": 0.0
+    shoulder_link:
+        - "center": [0.0, 0.0, 0.0]
+          "radius": 0.1  
+        - "center": [0.0, -0.13, 0.0]
+          "radius": 0.1          
+    upper_arm_link:
+        - "center": [-0.4, 0.0 , 0.13]
+          "radius": 0.1
+        - "center": [-0.27, 0.0 , 0.13]
+          "radius": 0.1
+        - "center": [-0.13, 0.0 , 0.13]
+          "radius": 0.1
+    forearm_link:
+        - "center": [0.0, 0.0, 0.0]
+          "radius": 0.08
+        - "center": [-0.125, 0.0, 0.0]
+          "radius": 0.08
+        - "center": [-0.25, 0.0, 0.0]
+          "radius": 0.08
+        - "center": [-0.375, 0.0, 0.0]
+          "radius": 0.08          
+    wrist_1_link:
+        - "center": [0.0, 0.0, 0.0]
+          "radius": 0.08
+    wrist_2_link:
+        - "center": [0.0, 0.0, 0.0]
+          "radius": 0.06
+    wrist_3_link:
+        - "center": [0.0, 0.0, 0.0]
+          "radius": 0.075
+    camera:
+        - "center": [0.0, 0.0, 0.07]
+          "radius": 0.005
+        # - "center": [0.02, 0.04, 0.08]
+        #   "radius": 0.025
+        # - "center": [0.04, 0.02, 0.08]
+        #   "radius": 0.025
+        # - "center": [0.04, 0.06, 0.085]
+        #   "radius": 0.02
+        # - "center": [0.06, 0.04, 0.085]
+        #   "radius": 0.02
