@@ -582,7 +582,7 @@
   <!-- End Effector -->
   <link name="tool0">
     <visual>
-      <origin rpy="1.5707963267948966 3.141592653589793 0" xyz="0 0 0"/>
+      <origin rpy="0.0 3.141592653589793 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="meshes/ur5e/visual/AnteriorScannerMounted-v1.obj"/>
       </geometry>
