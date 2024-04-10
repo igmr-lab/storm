@@ -67,6 +67,7 @@ class ArmBase(RolloutBase):
                                                  vel_scale=exp_params['model']['vel_scale'])
         self.dt = self.dynamics_model.dt
         self.n_dofs = self.dynamics_model.n_dofs
+
         # rollout traj_dt starts from dt->dt*(horizon+1) as tstep 0 is the current state
         #self.traj_dt = torch.arange(self.dt, (mppi_params['horizon'] + 1) * self.dt, self.dt, device=device, dtype=float_dtype)
         self.traj_dt = self.dynamics_model.traj_dt
@@ -209,6 +210,12 @@ class ArmBase(RolloutBase):
 
         
         return cost
+    
+    ### From PR https://github.com/NVlabs/storm/pull/10/commits/a03c4e0057290bd6796a549623461b932fc0a979
+    def get_spheres(self):
+        return self.robot_self_collision_cost.coll.w_batch_link_spheres    
+    
+    ####################################################################################################
     
     def rollout_fn(self, start_state, act_seq):
         """
