@@ -7,36 +7,103 @@ collision_spheres:
     shoulder_link:
         - "center": [0.0, 0.0, 0.0]
           "radius": 0.1  
-        - "center": [0.0, -0.13, 0.0]
+        - "center": [0.0, -0.14, 0.0]
           "radius": 0.1          
     upper_arm_link:
-        - "center": [-0.4, 0.0 , 0.13]
-          "radius": 0.1
-        - "center": [-0.27, 0.0 , 0.13]
-          "radius": 0.1
-        - "center": [-0.13, 0.0 , 0.13]
+        - "center": [-0.05, 0.0 , 0.14]
+          "radius": 0.06
+        - "center": [-0.1, 0.0 , 0.14]
+          "radius": 0.06          
+        - "center": [-0.15, 0.0 , 0.14]
+          "radius": 0.06
+        - "center": [-0.2, 0.0 , 0.14]
+          "radius": 0.06       
+        - "center": [-0.25, 0.0 , 0.14]
+          "radius": 0.06       
+        - "center": [-0.3, 0.0 , 0.14]
+          "radius": 0.06                               
+        - "center": [-0.4, 0.0 , 0.14]
           "radius": 0.1
     forearm_link:
-        - "center": [0.0, 0.0, 0.0]
-          "radius": 0.08
-        - "center": [-0.125, 0.0, 0.0]
-          "radius": 0.08
+        - "center": [-0.03, 0.0, 0.03]
+          "radius": 0.09   
+        - "center": [-0.1, 0.0, 0.0]
+          "radius": 0.05          
+        - "center": [-0.15, 0.0, 0.0]
+          "radius": 0.05
+        - "center": [-0.2, 0.0, 0.0]
+          "radius": 0.05
         - "center": [-0.25, 0.0, 0.0]
-          "radius": 0.08
-        - "center": [-0.375, 0.0, 0.0]
-          "radius": 0.08          
+          "radius": 0.05       
+        - "center": [-0.3, 0.0, 0.0]
+          "radius": 0.05                                       
+        - "center": [-0.35, 0.0, 0.0]
+          "radius": 0.05   
+        - "center": [-0.385, 0.0, 0.0]
+          "radius": 0.05                
+        - "center": [-0.385, 0.0,-0.015]
+          "radius": 0.06         
+        - "center": [-0.385, 0.0, 0.05]
+          "radius": 0.05                          
     wrist_1_link:
-        - "center": [0.0, 0.0, 0.0]
-          "radius": 0.08
+        - "center": [0.0, -0.05, 0.0]
+          "radius": 0.05
+        - "center": [0.0, -0.02, 0.0]
+          "radius": 0.05          
+        - "center": [0.0, 0.02, 0.0]
+          "radius": 0.06          
     wrist_2_link:
-        - "center": [0.0, 0.0, 0.0]
+        - "center": [0.0, -0.02, 0.0]
           "radius": 0.06
+        - "center": [0.0, 0.05, 0.0]
+          "radius": 0.05          
     wrist_3_link:
-        - "center": [0.0, 0.0, 0.0]
-          "radius": 0.075
+        - "center": [0.0, -0.01, -0.01]
+          "radius": 0.05
     camera:
-        - "center": [0.0, 0.0, 0.07]
-          "radius": 0.005
+        - "center": [-0.007, 0.018, 0.025]
+          "radius": 0.02
+        - "center": [-0.007, -0.018, 0.025]
+          "radius": 0.02       
+        - "center": [-0.007, 0.018, 0.0]
+          "radius": 0.02
+        - "center": [-0.007, -0.018, 0.0]
+          "radius": 0.02                       
+        - "center": [-0.007, 0.018, -0.025]
+          "radius": 0.02
+        - "center": [-0.007, -0.018, -0.025]
+          "radius": 0.02          
+
+        - "center": [-0.06, 0.0, 0.05]
+          "radius": 0.055
+        - "center": [-0.06, 0.05, 0.05]
+          "radius": 0.055 
+        - "center": [-0.06, -0.05, 0.05]
+          "radius": 0.055 
+        - "center": [-0.06, 0.1, 0.05]
+          "radius": 0.055 
+        - "center": [-0.06, -0.1, 0.05]
+          "radius": 0.055           
+
+        - "center": [-0.06, 0.14, -0.022]
+          "radius": 0.06
+        - "center": [-0.06, -0.14, -0.022]
+          "radius": 0.06            
+
+        - "center": [-0.08, 0.1, -0.07]
+          "radius": 0.03
+        - "center": [-0.08, -0.1, -0.07]
+          "radius": 0.03     
+
+        - "center": [-0.07, 0.07, -0.1]
+          "radius": 0.03
+        - "center": [-0.07, -0.07, -0.1]
+          "radius": 0.03    
+
+        - "center": [-0.055, 0.0, -0.12]
+          "radius": 0.05             
+        # - "center": [-0.05, 0.0, 0.0]
+        #   "radius": 0.05          
         # - "center": [0.02, 0.04, 0.08]
         #   "radius": 0.025
         # - "center": [0.04, 0.02, 0.08]
