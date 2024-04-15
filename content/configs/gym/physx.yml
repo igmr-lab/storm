@@ -29,7 +29,7 @@ sim_params:
   substeps: 1
   physx:
     bounce_threshold_velocity: 0.1
-    use_gpu: False
+    use_gpu: True
     solver_type: 0
     num_threads: 4
     contact_offset: 0.01
