@@ -126,7 +126,6 @@ class Gym(object):
         self.gym.add_lines(self.viewer,self.env_list[0], sphere_geom.num_lines(), verts, sphere_geom.colors())
 
     def draw_collision_spheres(self, sub_sphere, w_T_r):
-        print(sub_sphere)
         goal_pose = gymapi.Transform()
         goal_pose.p = gymapi.Vec3(sub_sphere[0], sub_sphere[1], sub_sphere[2])
         goal_pose.r = gymapi.Quat(0, 0.707, 0, 0.707)
