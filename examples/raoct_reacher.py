@@ -77,6 +77,7 @@ class reacherInterface:
         world_file = 'collision_primitives_3d.yml'
 
         # Get gym and sim
+        self.gym_instance = gym_instance
         self.gym = gym_instance.gym
         self.sim = gym_instance.sim
 
@@ -138,6 +139,7 @@ class reacherInterface:
                                         0.0   ,  0.0    ,  0.0   ,  0.0   ,  0.0    ,  0.0])
         self.mpc_control.update_params(goal_state=goal_as_robot_state)
 
+
         # Add goal relevant objects to world
         tray_color = gymapi.Vec3(0.8, 0.1, 0.1)
         goal_pose = self.get_goal_pose()
@@ -191,7 +193,9 @@ class reacherInterface:
         '''
         self.mpc_control.update_params(goal_state = goal_state, goal_ee_pos = goal_ee_pos, goal_ee_rot = goal_ee_rot, goal_ee_quat = goal_ee_quat)
         goal_pose = self.get_goal_pose()
-        self.gym.set_rigid_transform(self.env_ptr, self.target_body_handle, goal_pose)
+        # This being movable is a problem, we ideally want to just set the base handle, but then we would need to change the joint values
+        # TODO: if moving base handle then set joint values to 0
+        self.gym.set_rigid_transform(self.env_ptr, self.target_base_handle, goal_pose)
 
     def get_goal_pose(self) -> gymapi.Transform:
         object_pose = gymapi.Transform()
@@ -244,24 +248,27 @@ class reacherInterface:
                             goal_ee_quat=self.goal_q)
         
     def step(self):
-        gym_instance.step()
+        self.gym_instance.step()
         self.update_goal_from_world()
 
         self.t_step += self.sim_dt        
         current_robot_state = copy.deepcopy(self.robot_sim.get_state(self.env_ptr, self.robot_ptr))
+        
         command = self.mpc_control.get_command(self.t_step, current_robot_state, control_dt=self.sim_dt, WAIT=True)
 
         filtered_state_mpc = current_robot_state #mpc_control.current_state
         curr_state = np.hstack((filtered_state_mpc['position'], filtered_state_mpc['velocity'], filtered_state_mpc['acceleration']))
 
         curr_state_tensor = torch.as_tensor(curr_state, **self.tensor_args).unsqueeze(0)
-        # get position command:
-        q_des = copy.deepcopy(command['position'])
-        # qd_des = copy.deepcopy(command['velocity']) #* 0.5
-        # qdd_des = copy.deepcopy(command['acceleration'])
         
-        # ee_error = self.mpc_control.get_current_error(filtered_state_mpc)
-            
+        # get position command:
+        self.q_des = copy.deepcopy(command['position'])
+        
+        # Critical! This updates self.mpc_control.rollout_fn.link_pos_seq and 
+        #                        self.mpc_control.rollout_fn.link_rot_seq
+        ee_error = self.mpc_control.get_current_error(filtered_state_mpc)
+        
+
         pose_state = self.mpc_control.controller.rollout_fn.get_ee_pose(curr_state_tensor)
         
         # get current pose:
@@ -279,11 +286,10 @@ class reacherInterface:
         #       "{:.3f}".format(self.mpc_control.mpc_dt))
     
         
-        gym_instance.clear_lines()
+        self.gym_instance.clear_lines()
         top_trajs = self.mpc_control.top_trajs.cpu().float()#.numpy()
         n_p, n_t = top_trajs.shape[0], top_trajs.shape[1]
         w_pts = self.w_robot_coord.transform_point(top_trajs.view(n_p * n_t, 3)).view(n_p, n_t, 3)
-
 
         top_trajs = w_pts.cpu().numpy()
         color = np.array([0.0, 1.0, 0.0])
@@ -291,11 +297,10 @@ class reacherInterface:
             pts = top_trajs[k,:,:]
             color[0] = float(k) / float(top_trajs.shape[0])
             color[1] = 1.0 - float(k) / float(top_trajs.shape[0])
-            gym_instance.draw_lines(pts, color=color)
-        
-
+            self.gym_instance.draw_lines(pts, color=color)
         if self.viz_collision_spheres:
-        ### From PR https://github.com/NVlabs/storm/pull/10/commits/a03c4e0057290bd6796a549623461b932fc0a979
+
+            ### From PR https://github.com/NVlabs/storm/pull/10/commits/a03c4e0057290bd6796a549623461b932fc0a979
             link_pos_seq = copy.deepcopy(self.mpc_control.controller.rollout_fn.link_pos_seq)
             link_rot_seq = copy.deepcopy(self.mpc_control.controller.rollout_fn.link_rot_seq)
             batch_size = link_pos_seq.shape[0]
@@ -303,6 +308,7 @@ class reacherInterface:
             n_links = link_pos_seq.shape[2]
             link_pos = link_pos_seq.view(batch_size * horizon, n_links, 3)
             link_rot = link_rot_seq.view(batch_size * horizon, n_links, 3, 3)
+
             self.mpc_control.controller.rollout_fn.robot_self_collision_cost.coll.update_batch_robot_collision_objs(link_pos, link_rot)
 
             spheres = self.mpc_control.controller.rollout_fn.get_spheres()
@@ -312,11 +318,12 @@ class reacherInterface:
                     arr = np.array(sphere[1:,:,:4].cpu().numpy().squeeze())
                 else:
                     arr = np.vstack((arr,sphere[1:,:,:4].cpu().numpy().squeeze()))
+            [self.gym_instance.draw_collision_spheres(sphere,self.w_T_r) for sphere in arr]
+            ####################################################################################################
 
-            [gym_instance.draw_collision_spheres(sphere,self.w_T_r) for sphere in arr]
-        ####################################################################################################
 
-        self.robot_sim.command_robot_position(q_des, self.env_ptr, self.robot_ptr)
+        self.robot_sim.command_robot_position(self.q_des, self.env_ptr, self.robot_ptr)
+
 
 
 
@@ -391,7 +398,6 @@ def mpc_robot_interactive(args, gym_instance):
     mpc_control = ReacherTask(task_file, robot_file, world_file, tensor_args)
 
     n_dof = mpc_control.controller.rollout_fn.dynamics_model.n_dofs
-
     
     start_qdd = torch.zeros(n_dof, **tensor_args)
     # update goal:
@@ -427,10 +433,10 @@ def mpc_robot_interactive(args, gym_instance):
     x,y,z = 0.0, 0.0, 0.0
 
     tray_color = gymapi.Vec3(0.8, 0.1, 0.1)
-    asset_options = gymapi.AssetOptions()
-    asset_options.armature = 0.001
-    asset_options.fix_base_link = True
-    asset_options.thickness = 0.002
+    # asset_options = gymapi.AssetOptions()
+    # asset_options.armature = 0.001
+    # asset_options.fix_base_link = True
+    # asset_options.thickness = 0.002
 
 
     object_pose = gymapi.Transform()
@@ -616,12 +622,12 @@ if __name__ == '__main__':
         raise ValueError("Invalid TrajOpt mode provided")
 
     # mpc_robot_interactive(args, gym_instance)
-    mpc_robot_interactive = reacherInterface(args, gym_instance)
+    mpc_robot_interactive_class = reacherInterface(args, gym_instance)
     while True:
         try:
-            mpc_robot_interactive.step()
+            mpc_robot_interactive_class.step()
         except KeyboardInterrupt:
             print('Closing')
             done = True
             break
-    mpc_robot_interactive.mpc_control.close()
+    mpc_robot_interactive_class.mpc_control.close()
