@@ -126,9 +126,7 @@ class iCEM(Controller):
         sample_shape = (N, self.horizon, self.d_action)
         # colored noise
         if self.noise_beta > 0:
-            # Important improvement
-            # self.mean has shape h,d: we need to swap d and h because temporal correlations are in last axis)
-            # noinspection PyUnresolvedReferences
+            #need to swap d_action and horizon because temporal correlations are in last axis
             samples = colorednoise.powerlaw_psd_gaussian(self.noise_beta, size=(N, self.d_action, self.horizon)).transpose(
                 [0, 2, 1])
             samples = torch.from_numpy(samples).to(**self.tensor_args)
@@ -154,21 +152,19 @@ class iCEM(Controller):
             self.kept_elites = self.kept_elites.roll(-shift_steps, dims=1)
             self.kept_elites[:, -1] = self.sigma * torch.randn(len(self.kept_elites), self.d_action, **self.tensor_args)
 
-
-    def _exp_util(self, costs, actions):
-        """
-            Calculate weights using exponential utility
-        """
+    def _update_total_costs(self, costs, actions):
         traj_costs = cost_to_go(costs, self.gamma_seq)
         # if not self.time_based_weights: traj_costs = traj_costs[:,0]
         traj_costs = traj_costs[:,0]
         #control_costs = self._control_costs(actions)
+        self.total_costs = traj_costs #+ self.beta * control_costs
 
-        total_costs = traj_costs #+ self.beta * control_costs
-        
+    def _exp_util(self, total_costs):
+        """
+            Calculate weights using exponential utility
+        """
         # #calculate soft-max
         w = torch.softmax((-1.0/self.beta) * total_costs, dim=0)
-        self.total_costs = total_costs
         return w
 
 
@@ -178,14 +174,12 @@ class iCEM(Controller):
         costs = trajectories['costs']
         vis_seq = trajectories[self.visual_traj].to(**self.tensor_args)
         
-        w = self._exp_util(costs, actions) #This updates self.total_costs
+        self._update_total_costs(costs, actions)
 
         # Parse trajectories for top performers
-        # top_values, top_idx = torch.topk(self.total_costs, 10)
-        self.best_idx = torch.argmax(w)
-        self.best_traj = torch.index_select(actions, 0, self.best_idx).squeeze(0)
-
         self.top_values, self.top_idx = torch.topk(-self.total_costs, self.num_kept_elites)
+        self.best_idx = self.top_idx[0]
+        self.best_traj = torch.index_select(actions, 0, self.best_idx).squeeze(0)
 
         self.top_trajs = torch.index_select(vis_seq, 0, self.top_idx[:self.num_elites])
         elites = actions[self.top_idx[:self.num_elites]]
