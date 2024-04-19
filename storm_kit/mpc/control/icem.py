@@ -33,7 +33,6 @@ class iCEM(Controller):
                  horizon,
                  beta,
                  gamma,
-                 n_iters,
                  action_lows,
                  action_highs,
                  squash_fn,
@@ -58,12 +57,13 @@ class iCEM(Controller):
                                     action_highs,
                                     horizon,
                                     gamma,
-                                    n_iters,
-                                    rollout_fn,
-                                    sample_mode,
-                                    hotstart,
-                                    seed,
-                                    tensor_args)
+                                    n_iters =1,
+                                    rollout_fn = rollout_fn,
+                                    sample_mode = sample_mode,
+                                    hotstart = hotstart,
+                                    seed = seed,
+                                    tensor_args = tensor_args)
+        
         self.beta = beta
         self.visual_traj = visual_traj
 
@@ -95,6 +95,7 @@ class iCEM(Controller):
         self.warmed_up = False
         self.num_kept_elites = int(self.num_particles*self.keep_fraction) 
         self.reset_distribution()
+        
     def generate_rollouts(self, state):
         """
             Samples a batch of actions, rolls out trajectories for each particle
@@ -112,6 +113,32 @@ class iCEM(Controller):
         trajectories = self._rollout_fn(state, act_seq)
         return trajectories
     
+    def sample_actions(self, state = None):
+        if self.kept_elites is None:
+            U = self._sample_actions(self.num_particles)
+        else:
+            U = self._sample_actions(self.num_particles - len(self.kept_elites))
+            U = torch.cat((U, self.kept_elites), dim = 0)
+
+        return U
+
+    def _sample_actions(self, N):
+        sample_shape = (N, self.horizon, self.d_action)
+        # colored noise
+        if self.noise_beta > 0:
+            # Important improvement
+            # self.mean has shape h,d: we need to swap d and h because temporal correlations are in last axis)
+            # noinspection PyUnresolvedReferences
+            samples = colorednoise.powerlaw_psd_gaussian(self.noise_beta, size=(N, self.d_action, self.horizon)).transpose(
+                [0, 2, 1])
+            samples = torch.from_numpy(samples).to(**self.tensor_args)
+        else:
+            samples = torch.randn(size = sample_shape, **self.tensor_args)
+
+        U = self.mean_action + self.std * samples
+        return U
+
+
     def _shift(self, shift_steps):
         """
             Predict mean for the next time step by
@@ -120,6 +147,8 @@ class iCEM(Controller):
         if(shift_steps == 0):
             return
         self.mean_action = self.mean_action.roll(-shift_steps,0)
+        self.mean_action[-1] = torch.zeros(self.d_action, **self.tensor_args)
+        self.std = self.sigma.clone()
         self.best_traj = self.best_traj.roll(-shift_steps,0)        
         if self.kept_elites is not None:
             self.kept_elites = self.kept_elites.roll(-shift_steps, dims=1)
@@ -154,13 +183,12 @@ class iCEM(Controller):
         # Parse trajectories for top performers
         # top_values, top_idx = torch.topk(self.total_costs, 10)
         self.best_idx = torch.argmax(w)
+        self.best_traj = torch.index_select(actions, 0, self.best_idx).squeeze(0)
 
-        self.top_values, self.top_idx = torch.topk(self.total_costs, self.num_kept_elites)
+        self.top_values, self.top_idx = torch.topk(-self.total_costs, self.num_kept_elites)
 
         self.top_trajs = torch.index_select(vis_seq, 0, self.top_idx[:self.num_elites])
-        self.best_traj = torch.index_select(actions, 0, self.top_idx[:self.num_elites]).squeeze(0)
         elites = actions[self.top_idx[:self.num_elites]]
-        self.best_action = elites[0]
         # fit around mean of elites
         new_mean = elites.mean(dim=0)
         new_std = elites.std(dim=0)
@@ -169,30 +197,7 @@ class iCEM(Controller):
         self.std = (1 - self.alpha) * new_std + self.alpha * self.std        
         self.kept_elites = actions[self.top_idx]
 
-    def sample_actions(self, state = None):
-        if self.kept_elites is None:
-            U = self._sample_actions(self.num_particles)
-        else:
-            U = self._sample_actions(self.num_particles - len(self.kept_elites))
-            U = torch.cat((U, self.kept_elites), dim = 0)
 
-        return U
-
-    def _sample_actions(self, N):
-        sample_shape = (N, self.horizon, self.d_action)
-        # colored noise
-        if self.noise_beta > 0:
-            # Important improvement
-            # self.mean has shape h,d: we need to swap d and h because temporal correlations are in last axis)
-            # noinspection PyUnresolvedReferences
-            samples = colorednoise.powerlaw_psd_gaussian(self.noise_beta, size=(N, self.d_action, self.horizon)).transpose(
-                [0, 2, 1])
-            samples = torch.from_numpy(samples).to(**self.tensor_args)
-        else:
-            samples = torch.randn(size = sample_shape, **self.tensor_args)
-
-        U = self.mean_action + self.std * samples
-        return U
     
     def _get_action_seq(self, mode='mean'):
         # if mode == 'mean':
@@ -203,8 +208,7 @@ class iCEM(Controller):
         #     act_seq = self.mean_action + torch.matmul(delta, self.full_scale_tril)
         # else:
         #     raise ValueError('Unidentified sampling mode in get_next_action')
-        act_seq = scale_ctrl(self.best_action, self.action_lows, self.action_highs, squash_fn=self.squash_fn)
-
+        act_seq = scale_ctrl(self.best_traj, self.action_lows, self.action_highs, squash_fn=self.squash_fn)
         return act_seq
     
     def _control_costs(self, actions):
@@ -301,6 +305,7 @@ class iCEM(Controller):
                     if self.check_convergence():
                         break
         self.trajectories = trajectory
+        self._shift(shift_steps)
         #calculate best action
         # curr_action = self._get_next_action(state, mode=self.sample_mode)
         curr_action_seq = self._get_action_seq(mode=self.sample_mode)
