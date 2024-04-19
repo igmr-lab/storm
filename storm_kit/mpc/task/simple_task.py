@@ -62,7 +62,7 @@ class SimpleTask(BaseTask):
 
 
         mppi_params = exp_params['mppi']
-        mppi_params['num_particles'] = exp_params['controller']['num_particles']
+        mppi_params['num_particles'] = exp_params['common_controller_params']['num_particles']
         dynamics_model = rollout_fn.dynamics_model
         mppi_params['d_action'] = dynamics_model.d_action
         mppi_params['action_lows'] = -exp_params['model']['max_action'] * torch.ones(dynamics_model.d_action, **self.tensor_args)

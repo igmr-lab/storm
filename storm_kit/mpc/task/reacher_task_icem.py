@@ -80,8 +80,8 @@ class ReacherTaskiCEM(BaseTask):
         
     
         icem_params = exp_params['icem']
-        icem_params['num_particles'] = exp_params['controller']['num_particles']
-        icem_params['horizon'] = exp_params['controller']['horizon']
+        icem_params['num_particles'] = exp_params['common_controller_params']['num_particles']
+        icem_params['horizon'] = exp_params['common_controller_params']['horizon']
 
         ### TODO: fit icem where it makes sense
         dynamics_model = rollout_fn.dynamics_model

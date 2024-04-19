@@ -57,8 +57,8 @@ def create_dataset(robot_name):
     exp_params['control_space'] = 'pos'
     # exp_params['mppi']['horizon'] = 2
     # exp_params['mppi']['num_particles'] = num_particles
-    exp_params['controller']['num_particles'] = num_particles
-    exp_params['controller']['horizon'] = 2
+    exp_params['common_controller_params']['num_particles'] = num_particles
+    exp_params['common_controller_params']['horizon'] = 2
 
     rollout_fn = ArmBase(exp_params, tensor_args, world_params=None)
     

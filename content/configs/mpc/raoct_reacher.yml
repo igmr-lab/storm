@@ -58,7 +58,6 @@ model:
     urdf: "urdf/raoct_description/raoct.urdf"
     sample_points: 100
     link_objs: ['shoulder_link','upper_arm_link','forearm_link','wrist_1_link', 'wrist_2_link','wrist_3_link', 'camera']
-    #link_objs: ['panda_link6']
     threshold: 0.35
     bounds: [[-0.5, -0.8, 0.0],[0.5,0.8,1.0]]
     collision_spheres: '../robot/raoct.yml'
@@ -163,14 +162,14 @@ cost:
   retract_weight: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0.0]
 
 
-controller:
-  num_particles     : 100
-  horizon           : 15
+common_controller_params:
+  num_particles     : 250
+  horizon           : 30
 
 mppi:
   init_cov          : 0.005 #.5 #.5
   gamma             : 0.98
-  n_iters           : 50
+  n_iters           : 1
   step_size_mean    : 0.98
   step_size_cov     : 0.7
   beta              : 1.0
@@ -193,12 +192,14 @@ mppi:
     knot_scale: 4
 
 icem:
-  gamma             : 0.98    #Discount factor
-  beta              : 1.0     #Cost weighting
-  alpha             : 0.05    #Interpolation factor
-  squash_fn         : 'clamp'
-  visual_traj       : 'ee_pos_seq'
-  warmup_iters      : 10
-  online_iters      : 10
-  num_elites        : 5
-  
+  gamma               : 0.98    #Discount factor
+  noise_beta          : 3
+  elites_keep_fraction: 
+  beta                : 1.0     #Cost weighting
+  alpha               : 0.05    #Interpolation factor
+  squash_fn           : 'clamp'
+  visual_traj         : 'ee_pos_seq'
+  warmup_iters        : 50
+  online_iters        : 5
+  num_elites          : 50
+
