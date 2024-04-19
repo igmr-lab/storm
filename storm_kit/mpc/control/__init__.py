@@ -21,5 +21,5 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.#
 from .mppi import MPPI
-
+from .icem import iCEM
 #__all__ = ["Controller", "OLGaussianMPC", "MPPI"]

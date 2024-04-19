@@ -60,6 +60,8 @@ from storm_kit.util_file import get_mpc_configs_path as mpc_configs_path
 
 from storm_kit.differentiable_robot_model.coordinate_transform import quaternion_to_matrix, CoordinateTransform
 from storm_kit.mpc.task.reacher_task import ReacherTask
+from storm_kit.mpc.task.reacher_task_icem import ReacherTaskiCEM
+
 np.set_printoptions(precision=2)
 
 
@@ -125,7 +127,11 @@ class reacherInterface:
         self.world = World(self.gym, self.sim, self.env_ptr, world_params, w_T_r=self.w_T_r)
 
         # Insantiate controller
-        self.mpc_control = ReacherTask(task_file, robot_file, world_file, self.tensor_args)
+        if args.mode == 'mppi':
+            self.mpc_control = ReacherTask(task_file, robot_file, world_file, self.tensor_args)
+        elif args.mode == 'icem':
+            self.mpc_control = ReacherTaskiCEM(task_file, robot_file, world_file, self.tensor_args)
+
 
         # Can't use self.set_goal here because object handle hasn't been instantiated yet
         goal_as_robot_state = np.array([0.1933,  -0.9666,  1.2566, -1.8688,  -1.6111,  0.1289,
@@ -141,8 +147,8 @@ class reacherInterface:
         obj_asset_root = get_assets_path()
 
         target_object = self.world.spawn_object(target_asset_file, obj_asset_root, goal_pose, color=tray_color, name='ee_target_object')
-        self.target_body_handle = self.gym.get_actor_rigid_body_handle(self.env_ptr, target_object, 0)
-        self.target_base_handle = self.gym.get_actor_rigid_body_handle(self.env_ptr, target_object, 6)
+        self.target_base_handle = self.gym.get_actor_rigid_body_handle(self.env_ptr, target_object, 0)
+        self.target_body_handle = self.gym.get_actor_rigid_body_handle(self.env_ptr, target_object, 6)
         self.gym.set_rigid_body_color(self.env_ptr, target_object, 0, gymapi.MESH_VISUAL_AND_COLLISION, tray_color)
         self.gym.set_rigid_body_color(self.env_ptr, target_object, 6, gymapi.MESH_VISUAL_AND_COLLISION, tray_color)
 
@@ -223,7 +229,6 @@ class reacherInterface:
         this discrepancy occurs primarily form pose override with the GUI
         '''
         pose = copy.deepcopy(self.world.get_pose(self.target_body_handle))
-
         pose = copy.deepcopy(self.w_T_r.inverse() * pose)
 
         if(np.linalg.norm(self.goal_pos - np.ravel([pose.p.x, pose.p.y, pose.p.z])) > 0.00001 or (np.linalg.norm(self.goal_q - np.ravel([pose.r.w, pose.r.x, pose.r.y, pose.r.z]))>0.0)):
@@ -242,7 +247,7 @@ class reacherInterface:
         gym_instance.step()
         self.update_goal_from_world()
 
-        self.t_step += self.sim_dt
+        self.t_step += self.sim_dt        
         current_robot_state = copy.deepcopy(self.robot_sim.get_state(self.env_ptr, self.robot_ptr))
         command = self.mpc_control.get_command(self.t_step, current_robot_state, control_dt=self.sim_dt, WAIT=True)
 
@@ -255,7 +260,7 @@ class reacherInterface:
         # qd_des = copy.deepcopy(command['velocity']) #* 0.5
         # qdd_des = copy.deepcopy(command['acceleration'])
         
-        # ee_error = mpc_control.get_current_error(filtered_state_mpc)
+        # ee_error = self.mpc_control.get_current_error(filtered_state_mpc)
             
         pose_state = self.mpc_control.controller.rollout_fn.get_ee_pose(curr_state_tensor)
         
@@ -270,8 +275,8 @@ class reacherInterface:
         if(self.viz_ee_target):
             self.gym.set_rigid_transform(self.env_ptr, self.ee_body_handle, copy.deepcopy(self.ee_pose))
 
-        # print(["{:.3f}".format(x) for x in ee_error], "{:.3f}".format(mpc_control.opt_dt),
-        #       "{:.3f}".format(mpc_control.mpc_dt))
+        # print(["{:.3f}".format(x) for x in ee_error], "{:.3f}".format(self.mpc_control.opt_dt),
+        #       "{:.3f}".format(self.mpc_control.mpc_dt))
     
         
         gym_instance.clear_lines()
@@ -490,7 +495,6 @@ def mpc_robot_interactive(args, gym_instance):
                 pose = copy.deepcopy(world_instance.get_pose(obj_body_handle))
 
                 pose = copy.deepcopy(w_T_r.inverse() * pose)
-
                 if(np.linalg.norm(g_pos - np.ravel([pose.p.x, pose.p.y, pose.p.z])) > 0.00001 or (np.linalg.norm(g_q - np.ravel([pose.r.w, pose.r.x, pose.r.y, pose.r.z]))>0.0)):
                     g_pos[0] = pose.p.x
                     g_pos[1] = pose.p.y
@@ -507,7 +511,6 @@ def mpc_robot_interactive(args, gym_instance):
             current_robot_state = copy.deepcopy(robot_sim.get_state(env_ptr, robot_ptr))
             
 
-            
             command = mpc_control.get_command(t_step, current_robot_state, control_dt=sim_dt, WAIT=True)
 
             filtered_state_mpc = current_robot_state #mpc_control.current_state
@@ -591,6 +594,8 @@ if __name__ == '__main__':
     
     # instantiate empty gym:
     parser = argparse.ArgumentParser(description='pass args')
+    parser.add_argument('-m', '--mode', type=str, default='mppi', help='Choose TrajOpt algo: \n' + \
+                                                                        'mppi, icem')
     parser.add_argument('--robot', type=str, default='raoct', help='Robot to spawn')
     parser.add_argument('--cuda', action='store_true', default=True, help='use cuda')
     parser.add_argument('--headless', action='store_true', default=False, help='headless gym')
@@ -607,6 +612,9 @@ if __name__ == '__main__':
     gym_instance = Gym(**sim_params)
     
     
+    if args.mode not in ["mppi", "icem"]:
+        raise ValueError("Invalid TrajOpt mode provided")
+
     # mpc_robot_interactive(args, gym_instance)
     mpc_robot_interactive = reacherInterface(args, gym_instance)
     while True:

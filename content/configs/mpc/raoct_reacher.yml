@@ -188,3 +188,15 @@ mppi:
     seed: 0
     filter_coeffs: None #[0.3, 0.3, 0.4]
     knot_scale: 4
+
+icem:
+  horizon           : 30      #Time steps to optimize over
+  gamma             : 0.98    #Discount factor
+  n_iters           : 1       #not actually used
+  beta              : 1.0     #Cost weighting
+  alpha             : 0.05    #Interpolation factor
+  num_particles     : 500     #Number of trajectories to rollout
+  squash_fn         : 'clamp'
+  visual_traj       : 'ee_pos_seq'
+  warmup_iters      : 100
+  online_iters      : 50
