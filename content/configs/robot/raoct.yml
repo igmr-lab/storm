@@ -1,4 +1,4 @@
-robot: 'RAOCT'
+robot: 'raoct'
 
 collision_spheres:
     base_link_inertia:
