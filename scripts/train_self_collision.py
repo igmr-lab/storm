@@ -55,8 +55,11 @@ def create_dataset(robot_name):
     exp_params['robot_params'] = exp_params['model'] #robot_params
     exp_params['cost']['primitive_collision']['weight'] = 0.0
     exp_params['control_space'] = 'pos'
-    exp_params['mppi']['horizon'] = 2
-    exp_params['mppi']['num_particles'] = num_particles
+    # exp_params['mppi']['horizon'] = 2
+    # exp_params['mppi']['num_particles'] = num_particles
+    exp_params['controller']['num_particles'] = num_particles
+    exp_params['controller']['horizon'] = 2
+
     rollout_fn = ArmBase(exp_params, tensor_args, world_params=None)
     
     # sample joint angles

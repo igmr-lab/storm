@@ -162,16 +162,19 @@ cost:
   retract_state : [0.00, 0.0, 0.00, -1.5, 0.00, 2.0, 0.0]
   retract_weight: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0.0]
 
+
+controller:
+  num_particles     : 100
+  horizon           : 15
+
 mppi:
-  horizon           : 30
   init_cov          : 0.005 #.5 #.5
   gamma             : 0.98
-  n_iters           : 1
+  n_iters           : 50
   step_size_mean    : 0.98
   step_size_cov     : 0.7
   beta              : 1.0
   alpha             : 1
-  num_particles     : 500 #10000
   update_cov        : False
   cov_type          : 'diag_AxA' # 
   kappa             : 0.005
@@ -190,13 +193,12 @@ mppi:
     knot_scale: 4
 
 icem:
-  horizon           : 30      #Time steps to optimize over
   gamma             : 0.98    #Discount factor
-  n_iters           : 1       #not actually used
   beta              : 1.0     #Cost weighting
   alpha             : 0.05    #Interpolation factor
-  num_particles     : 500     #Number of trajectories to rollout
   squash_fn         : 'clamp'
   visual_traj       : 'ee_pos_seq'
-  warmup_iters      : 100
-  online_iters      : 50
+  warmup_iters      : 10
+  online_iters      : 10
+  num_elites        : 5
+  

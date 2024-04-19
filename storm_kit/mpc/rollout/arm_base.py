@@ -46,6 +46,7 @@ class ArmBase(RolloutBase):
         self.tensor_args = tensor_args
         self.exp_params = exp_params
         mppi_params = exp_params['mppi']
+        num_particles = exp_params['controller']['num_particles']
         model_params = exp_params['model']
 
         robot_params = exp_params['robot_params']
@@ -53,11 +54,12 @@ class ArmBase(RolloutBase):
         assets_path = get_assets_path()
         #print('EE LINK',exp_params['model']['ee_link_name'])
         # initialize dynamics model:
-        dynamics_horizon = mppi_params['horizon'] * model_params['dt']
+        dynamics_horizon = exp_params['controller']['horizon'] * model_params['dt']
+        # dynamics_horizon = mppi_params['horizon'] * model_params['dt']
         #Create the dynamical system used for rollouts
         self.dynamics_model = URDFKinematicModel(join_path(assets_path,exp_params['model']['urdf_path']),
                                                  dt=exp_params['model']['dt'],
-                                                 batch_size=mppi_params['num_particles'],
+                                                 batch_size=num_particles,
                                                  horizon=dynamics_horizon,
                                                  tensor_args=self.tensor_args,
                                                  ee_link_name=exp_params['model']['ee_link_name'],

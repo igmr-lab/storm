@@ -66,6 +66,9 @@ class ArmTask(BaseTask):
         rollout_fn = self.get_rollout_fn(exp_params=exp_params, tensor_args=self.tensor_args, world_params=world_params)
         
         mppi_params = exp_params['mppi']
+        mppi_params['num_particles'] = exp_params['controller']['num_particles']
+        mppi_params['horizon'] = exp_params['controller']['horizon']
+
         dynamics_model = rollout_fn.dynamics_model
         mppi_params['d_action'] = dynamics_model.d_action
         mppi_params['action_lows'] = -exp_params['model']['max_acc'] * torch.ones(dynamics_model.d_action, **self.tensor_args)

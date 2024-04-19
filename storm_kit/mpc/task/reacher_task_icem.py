@@ -78,7 +78,10 @@ class ReacherTaskiCEM(BaseTask):
         
         rollout_fn = self.get_rollout_fn(exp_params=exp_params, tensor_args=self.tensor_args, world_params=world_params)
         
+    
         icem_params = exp_params['icem']
+        icem_params['num_particles'] = exp_params['controller']['num_particles']
+        icem_params['horizon'] = exp_params['controller']['horizon']
 
         ### TODO: fit icem where it makes sense
         dynamics_model = rollout_fn.dynamics_model

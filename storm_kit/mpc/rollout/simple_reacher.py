@@ -43,15 +43,17 @@ class SimpleReacher(object):
         self.tensor_args = tensor_args
         self.exp_params = exp_params
         mppi_params = exp_params['mppi']
+        num_particles = exp_params['controller']['num_particles']
 
         # initialize dynamics model:
-        dynamics_horizon = mppi_params['horizon'] # model_params['dt']
+        # dynamics_horizon = mppi_params['horizon'] # model_params['dt']
+        dynamics_horizon = exp_params['controller']['horizon']
         #Create the dynamical system used for rollouts
 
         self.dynamics_model = HolonomicModel(dt=exp_params['model']['dt'],
                                              dt_traj_params=exp_params['model']['dt_traj_params'],
                                              horizon=mppi_params['horizon'],
-                                             batch_size=mppi_params['num_particles'],
+                                             batch_size=num_particles,
                                              tensor_args=self.tensor_args,
                                              control_space=exp_params['control_space'])
 
