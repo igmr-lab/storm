@@ -98,7 +98,7 @@ cost:
     
   primitive_collision:
     weight: 5000.0
-    distance_threshold: 0.05
+    distance_threshold: 0.01
     gaussian_params: {'n':0, 'c':0.0, 's':0, 'r':10.0}
 
   robot_self_collision:
@@ -193,13 +193,13 @@ mppi:
 
 icem:
   gamma               : 0.98    #Discount factor
-  noise_beta          : 3
-  elites_keep_fraction: 
+  noise_beta          : 3.0
+  elites_keep_fraction: 0.5
   beta                : 1.0     #Cost weighting
   alpha               : 0.05    #Interpolation factor
   squash_fn           : 'clamp'
   visual_traj         : 'ee_pos_seq'
   warmup_iters        : 50
-  online_iters        : 5
-  num_elites          : 50
+  online_iters        : 20
+  num_elites          : 10
 
