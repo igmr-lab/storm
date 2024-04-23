@@ -36,7 +36,9 @@ class PoseCost(nn.Module):
 
     
     """
-    def __init__(self, weight, vec_weight=[], position_gaussian_params={}, orientation_gaussian_params={}, tensor_args={'device':"cpu", 'dtype':torch.float32}, hinge_val=100.0,
+    def __init__(self, weight, vec_weight=[], position_gaussian_params={}, orientation_gaussian_params={}, 
+                 gaze_gaussian_params={},
+                 tensor_args={'device':"cpu", 'dtype':torch.float32}, hinge_val=100.0,
                  convergence_val=[0.0,0.0]):
 
         super(PoseCost, self).__init__()
@@ -57,6 +59,7 @@ class PoseCost(nn.Module):
 
         self.position_gaussian = GaussianProjection(gaussian_params=position_gaussian_params)
         self.orientation_gaussian = GaussianProjection(gaussian_params=orientation_gaussian_params)
+        self.gaze_gaussian = GaussianProjection(gaussian_params=gaze_gaussian_params)
         self.hinge_val = hinge_val
         self.convergence_val = convergence_val
         self.dtype = self.tensor_args['dtype']
@@ -80,7 +83,10 @@ class PoseCost(nn.Module):
         R_g_t = ee_goal_rot.transpose(-2,-1) # w_R_g -> g_R_w
         R_g_t_d = (-1.0 * R_g_t @ ee_goal_pos.t()).transpose(-2,-1) # -g_R_w * w_d_g -> g_d_g
 
-        
+        #Inverse of ee transform
+        R_ee_t = ee_rot_batch.transpose(-2,-1)
+        R_ee_t_d = (-1.0 * R_ee_t @ ee_pos_batch.unsqueeze(-1))
+
         #Rotation part
         R_g_ee = R_g_t @ ee_rot_batch # g_R_w * w_R_ee -> g_R_ee
         
@@ -99,14 +105,29 @@ class PoseCost(nn.Module):
         
         rot_err = torch.square(torch.sum(self.rot_weight * rot_err, dim=-1))
 
+        #Gaze part
+        repeat_shape = ee_pos_batch.shape[:2] + (1, 1)
+        ee_goal_pos_batch = ee_goal_pos.t().repeat(repeat_shape)
+
+        ee_goal_in_ee_frame = R_ee_t@ee_goal_pos_batch + R_ee_t_d
+
+        x = ee_goal_in_ee_frame[:, :, 0, :]
+
+        r2 = torch.square(ee_goal_in_ee_frame[:, :, 1, :]) + torch.square(ee_goal_in_ee_frame[:, :, 2, :])  
+
+        gaze_cost = torch.arctan(torch.sqrt(r2)/ x).squeeze()
 
         if(self.hinge_val > 0.0):
             rot_err = torch.where(goal_dist.squeeze(-1) <= self.hinge_val, rot_err, self.Z) #hard hinge
 
         rot_err[rot_err < self.convergence_val[0]] = 0.0
         position_err[position_err < self.convergence_val[1]] = 0.0
-        cost = self.weight[0] * self.orientation_gaussian(torch.sqrt(rot_err)) + self.weight[1] * self.position_gaussian(torch.sqrt(position_err))
 
+        cost = self.weight[0] * self.orientation_gaussian(torch.sqrt(rot_err)) + \
+                self.weight[1] * self.position_gaussian(torch.sqrt(position_err)) + \
+                self.weight[2] * self.gaze_gaussian(gaze_cost)
+
+    
         # dimension should be bacth * traj_length
         return cost.to(inp_device), rot_err_norm, goal_dist
 
