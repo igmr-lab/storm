@@ -181,7 +181,7 @@ class iCEM(Controller):
         self.best_idx = self.top_idx[0]
         self.best_traj = torch.index_select(actions, 0, self.best_idx).squeeze(0)
 
-        self.top_trajs = torch.index_select(vis_seq, 0, self.top_idx[:self.num_elites])
+        self.top_trajs = torch.index_select(vis_seq, 0, self.top_idx[:10])
         elites = actions[self.top_idx[:self.num_elites]]
         # fit around mean of elites
         new_mean = elites.mean(dim=0)
