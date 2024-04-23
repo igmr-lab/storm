@@ -61,6 +61,7 @@ from storm_kit.util_file import get_mpc_configs_path as mpc_configs_path
 from storm_kit.differentiable_robot_model.coordinate_transform import quaternion_to_matrix, CoordinateTransform
 from storm_kit.mpc.task.reacher_task import ReacherTask
 from storm_kit.mpc.task.reacher_task_icem import ReacherTaskiCEM
+from storm_kit.mpc.control.icem import iCEM
 
 np.set_printoptions(precision=2)
 
@@ -135,9 +136,18 @@ class reacherInterface:
 
 
         # Can't use self.set_goal here because object handle hasn't been instantiated yet
-        goal_as_robot_state = np.array([0.1933,  -0.9666,  1.2566, -1.8688,  -1.6111,  0.1289,
-                                        0.0   ,  0.0    ,  0.0   ,  0.0   ,  0.0    ,  0.0])
-        self.mpc_control.update_params(goal_state=goal_as_robot_state)
+        # goal_as_robot_state = np.array([0.1933,  -0.9666,  1.2566, -1.8688,  -1.6111,  0.1289,
+        #                                 0.0   ,  0.0    ,  0.0   ,  0.0   ,  0.0    ,  0.0])
+        # self.mpc_control.update_params(goal_state=goal_as_robot_state)
+
+        goal_pose_robot_frame = gymapi.Transform()
+        goal_pose_robot_frame.p = gymapi.Vec3(-0.5, 1.25 + 0.2, 0.04) #x, z, y
+        goal_pose_robot_frame.r = gymapi.Quat(-0.028, -0.693, -0.720, 0.018)
+
+        goal_pose_world_frame = self.w_T_r.inverse()*goal_pose_robot_frame
+        self.goal_pos, self.goal_q = self.transform_to_array(goal_pose_world_frame)
+        self.mpc_control.update_params(goal_ee_pos = self.goal_pos, goal_ee_quat = self.goal_q)
+
 
 
         # Add goal relevant objects to world
@@ -175,6 +185,12 @@ class reacherInterface:
 
         self.ee_pose = gymapi.Transform()
 
+    def is_warmed_up(self):
+        if isinstance(self.mpc_control, iCEM):
+            return self.mpc_control.warmed_up
+        else:
+            return True
+
     def get_params(self, yaml_file: str) -> dict:
         '''
         :param yaml_file: filename
@@ -182,6 +198,12 @@ class reacherInterface:
         with open(yaml_file) as file:
             params = yaml.load(file, Loader = yaml.FullLoader)
         return params
+
+    def transform_to_array(self, pose: gymapi.Transform) -> tuple:
+        pos = np.array([pose.p.x, pose.p.y, pose.p.z])
+        quat = np.array([pose.r.w, pose.r.x, pose.r.y, pose.r.z])
+
+        return pos, quat
 
     def set_goal(self, goal_state: np.ndarray = None, goal_ee_pos = None, goal_ee_rot = None, goal_ee_quat = None):
         '''
@@ -195,7 +217,7 @@ class reacherInterface:
         goal_pose = self.get_goal_pose()
         # This being movable is a problem, we ideally want to just set the base handle, but then we would need to change the joint values
         # TODO: if moving base handle then set joint values to 0
-        self.gym.set_rigid_transform(self.env_ptr, self.target_base_handle, goal_pose)
+        # self.gym.set_rigid_transform(self.env_ptr, self.target_base_handle, goal_pose)
 
     def get_goal_pose(self) -> gymapi.Transform:
         object_pose = gymapi.Transform()
@@ -203,10 +225,9 @@ class reacherInterface:
         g_pos = np.ravel(self.mpc_control.controller.rollout_fn.goal_ee_pos.cpu().numpy())
         g_q = np.ravel(self.mpc_control.controller.rollout_fn.goal_ee_quat.cpu().numpy())
         object_pose.p = gymapi.Vec3(g_pos[0], g_pos[1], g_pos[2])
-
         object_pose.r = gymapi.Quat(g_q[1], g_q[2], g_q[3], g_q[0])
-        object_pose = self.w_T_r * object_pose
 
+        object_pose = self.w_T_r * object_pose
         return object_pose
     
     def get_ee_pose(self) -> gymapi.Transform:
@@ -236,20 +257,14 @@ class reacherInterface:
         pose = copy.deepcopy(self.w_T_r.inverse() * pose)
 
         if(np.linalg.norm(self.goal_pos - np.ravel([pose.p.x, pose.p.y, pose.p.z])) > 0.00001 or (np.linalg.norm(self.goal_q - np.ravel([pose.r.w, pose.r.x, pose.r.y, pose.r.z]))>0.0)):
-            self.goal_pos[0] = pose.p.x
-            self.goal_pos[1] = pose.p.y
-            self.goal_pos[2] = pose.p.z
-            self.goal_q[1] = pose.r.x
-            self.goal_q[2] = pose.r.y
-            self.goal_q[3] = pose.r.z
-            self.goal_q[0] = pose.r.w
-
+            self.goal_pos, self.goal_q = self.transform_to_array(pose)
             self.set_goal(goal_ee_pos=self.goal_pos,
                             goal_ee_quat=self.goal_q)
         
     def step(self):
         self.gym_instance.step()
         self.update_goal_from_world()
+        self.get_goal_pose()
 
         self.t_step += self.sim_dt        
         current_robot_state = copy.deepcopy(self.robot_sim.get_state(self.env_ptr, self.robot_ptr))
@@ -321,8 +336,8 @@ class reacherInterface:
             [self.gym_instance.draw_collision_spheres(sphere,self.w_T_r) for sphere in arr]
             ####################################################################################################
 
-
-        self.robot_sim.command_robot_position(self.q_des, self.env_ptr, self.robot_ptr)
+        if self.is_warmed_up():
+            self.robot_sim.command_robot_position(self.q_des, self.env_ptr, self.robot_ptr)
 
 
 
@@ -623,11 +638,16 @@ if __name__ == '__main__':
 
     # mpc_robot_interactive(args, gym_instance)
     mpc_robot_interactive_class = reacherInterface(args, gym_instance)
+    import time
     while True:
+        # start = time.time()
         try:
             mpc_robot_interactive_class.step()
         except KeyboardInterrupt:
             print('Closing')
             done = True
             break
+        finally:
+            pass
+            # print(f"Loop time: {time.time() - start}")
     mpc_robot_interactive_class.mpc_control.close()
