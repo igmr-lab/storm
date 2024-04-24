@@ -267,8 +267,6 @@ class ArmBase(RolloutBase):
     
     def get_ee_pose(self, current_state):
         current_state = current_state.to(**self.tensor_args)
-         
-        
         ee_pos_batch, ee_rot_batch, lin_jac_batch, ang_jac_batch = self.dynamics_model.robot_model.compute_fk_and_jacobian(current_state[:,:self.dynamics_model.n_dofs], current_state[:, self.dynamics_model.n_dofs: self.dynamics_model.n_dofs * 2], self.exp_params['model']['ee_link_name'])
 
         ee_quat = matrix_to_quaternion(ee_rot_batch)
@@ -276,23 +274,21 @@ class ArmBase(RolloutBase):
                  'lin_jac_seq': lin_jac_batch, 'ang_jac_seq': ang_jac_batch,
                  'ee_quat_seq':ee_quat}
         return state
+    
+    def update_link_poses(self, curr_batch_size = 1, num_traj_points = 1):
+        for ki,k in enumerate(self.dynamics_model.link_names):
+            link_pos, link_rot = self.dynamics_model.robot_model.get_link_pose(k)
+            self.link_pos_seq[:,:,ki,:] = link_pos.view((curr_batch_size, num_traj_points,3))
+            self.link_rot_seq[:,:,ki,:,:] = link_rot.view((curr_batch_size, num_traj_points,3,3))
+
+        return self.link_pos_seq.clone(), self.link_rot_seq.clone()
+
     def current_cost(self, current_state, no_coll=True):
         current_state = current_state.to(**self.tensor_args)
         
-        curr_batch_size = 1
-        num_traj_points = 1 #self.dynamics_model.num_traj_points
-        
         ee_pos_batch, ee_rot_batch, lin_jac_batch, ang_jac_batch = self.dynamics_model.robot_model.compute_fk_and_jacobian(current_state[:,:self.dynamics_model.n_dofs], current_state[:, self.dynamics_model.n_dofs: self.dynamics_model.n_dofs * 2], self.exp_params['model']['ee_link_name'])
 
-        link_pos_seq = self.link_pos_seq
-        
-        link_rot_seq = self.link_rot_seq
-
-        # get link poses:
-        for ki,k in enumerate(self.dynamics_model.link_names):
-            link_pos, link_rot = self.dynamics_model.robot_model.get_link_pose(k)
-            link_pos_seq[:,:,ki,:] = link_pos.view((curr_batch_size, num_traj_points,3))
-            link_rot_seq[:,:,ki,:,:] = link_rot.view((curr_batch_size, num_traj_points,3,3))
+        link_pos_seq, link_rot_seq = self.update_link_poses()
             
         if(len(current_state.shape) == 2):
             current_state = current_state.unsqueeze(0)
