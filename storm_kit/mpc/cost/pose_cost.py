@@ -37,7 +37,6 @@ class PoseCost(nn.Module):
     
     """
     def __init__(self, weight, vec_weight=[], position_gaussian_params={}, orientation_gaussian_params={}, 
-                 gaze_gaussian_params={},
                  tensor_args={'device':"cpu", 'dtype':torch.float32}, hinge_val=100.0,
                  convergence_val=[0.0,0.0]):
 
@@ -59,12 +58,12 @@ class PoseCost(nn.Module):
 
         self.position_gaussian = GaussianProjection(gaussian_params=position_gaussian_params)
         self.orientation_gaussian = GaussianProjection(gaussian_params=orientation_gaussian_params)
-        self.gaze_gaussian = GaussianProjection(gaussian_params=gaze_gaussian_params)
         self.hinge_val = hinge_val
         self.convergence_val = convergence_val
         self.dtype = self.tensor_args['dtype']
         self.device = self.tensor_args['device']
-    
+
+        self.cameraFOV_tensor = torch.tensor([torch.pi/3], **tensor_args)
 
     def forward(self, ee_pos_batch, ee_rot_batch, ee_goal_pos, ee_goal_rot):
 
@@ -106,16 +105,22 @@ class PoseCost(nn.Module):
         rot_err = torch.square(torch.sum(self.rot_weight * rot_err, dim=-1))
 
         #Gaze part
+        #Transform goal into ee frame
         repeat_shape = ee_pos_batch.shape[:2] + (1, 1)
         ee_goal_pos_batch = ee_goal_pos.t().repeat(repeat_shape)
-
         ee_goal_in_ee_frame = R_ee_t@ee_goal_pos_batch + R_ee_t_d
 
+        #Compute angle from x axis to goal position vector
         x = ee_goal_in_ee_frame[:, :, 0, :]
-
         r2 = torch.square(ee_goal_in_ee_frame[:, :, 1, :]) + torch.square(ee_goal_in_ee_frame[:, :, 2, :])  
 
-        gaze_cost = torch.arctan(torch.sqrt(r2)/ x).squeeze()
+        angle_from_center = torch.abs(torch.atan2(torch.sqrt(r2), x)).squeeze()
+        angle_from_center = torch.minimum(angle_from_center, self.cameraFOV_tensor-1e-4)
+
+        # We dont care about gaze when really close (creates issues with planning)
+        mask = torch.where(torch.abs(x)<0.03, 0, 1).squeeze()
+        gaze_cost = 1/(self.cameraFOV_tensor - angle_from_center) * mask # No gaze cost if close enough
+        
 
         if(self.hinge_val > 0.0):
             rot_err = torch.where(goal_dist.squeeze(-1) <= self.hinge_val, rot_err, self.Z) #hard hinge
@@ -123,9 +128,11 @@ class PoseCost(nn.Module):
         rot_err[rot_err < self.convergence_val[0]] = 0.0
         position_err[position_err < self.convergence_val[1]] = 0.0
 
+        # cost = self.weight[0] * self.orientation_gaussian(torch.sqrt(rot_err)) + \
+        #         self.weight[1] * self.position_gaussian(torch.sqrt(position_err))
         cost = self.weight[0] * self.orientation_gaussian(torch.sqrt(rot_err)) + \
                 self.weight[1] * self.position_gaussian(torch.sqrt(position_err)) + \
-                self.weight[2] * self.gaze_gaussian(gaze_cost)
+                self.weight[2] * gaze_cost
 
     
         # dimension should be bacth * traj_length
