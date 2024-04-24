@@ -53,7 +53,7 @@ from quaternion import from_euler_angles, as_float_array, as_rotation_matrix, fr
 
 from storm_kit.gym.core import Gym, World
 from storm_kit.gym.sim_robot import RobotSim
-from storm_kit.util_file import get_configs_path, get_gym_configs_path, join_path, load_yaml, get_assets_path
+from storm_kit.util_file import get_configs_path, get_gym_configs_path, join_path, load_yaml, get_assets_path, get_mpc_configs_path
 from storm_kit.gym.helpers import load_struct_from_dict
 
 from storm_kit.util_file import get_mpc_configs_path as mpc_configs_path
@@ -66,16 +66,45 @@ from storm_kit.mpc.control.icem import iCEM
 np.set_printoptions(precision=2)
 
 
+import logging
+
+from datetime import datetime
+from pytz import timezone
+
+# Create logger
+log = logging.getLogger('raoct_reacher.py')
+
+# Prevent adding multiple handlers to the logger
+if not log.handlers:
+    log.setLevel(logging.INFO)
+
+    # Create file handler which logs messages to a file 
+    now = datetime.now(timezone("EST")).strftime("%b-%d-%Y_%H-%M-%S")
+    fh = logging.FileHandler('/home/gymuser/raoct/storm/data/mpc_log_' + now + '.txt')
+    formatter = logging.Formatter('%(asctime)s %(message)s')
+    fh.setFormatter(formatter)
+    log.addHandler(fh)
+
+
 class reacherInterface:
-    def __init__(self, args, gym_instance):
+    def __init__(self, gym_instance, 
+                robot = 'raoct',
+                mode = 'mppi',
+                cuda = True, 
+                viz_collision_spheres = True,
+                viz_ee_target = True,
+                init_state = None, 
+                world_file = None):
         # Flags from argparse
-        self.viz_collision_spheres = args.viz_collision_spheres
-        self.viz_ee_target = args.viz_ee_target
+        self.viz_collision_spheres = viz_collision_spheres
+        self.viz_ee_target = viz_ee_target
         
         # Files
-        robot_file = args.robot + '.yml'
-        task_file = args.robot + '_reacher.yml'
-        world_file = 'collision_primitives_3d.yml'
+        robot_file = robot + '.yml'
+        task_file = robot + '_reacher.yml'
+        # world_file = 'collision_primitives_3d.yml'
+        if world_file is None:
+            world_file = 'wall.yml'
 
         # Get gym and sim
         self.gym_instance = gym_instance
@@ -86,15 +115,34 @@ class reacherInterface:
         world_yml = join_path(get_gym_configs_path(), world_file)
         world_params = self.get_params(world_yml)
 
-        robot_yml = join_path(get_gym_configs_path(),args.robot + '.yml')
+        robot_yml = join_path(get_gym_configs_path(), robot_file)
         robot_params = self.get_params(robot_yml)
 
         sim_params = robot_params['sim_params']
         sim_params['asset_root'] = get_assets_path()
         sim_params['collision_model'] = None
 
+        task_yml = join_path(get_mpc_configs_path(), task_file)
+        if init_state is not None:
+            sim_params['init_state'] = init_state
+            
+            #Overwrite contents of file (yaml.dump changes formatting)
+            with open(task_yml, 'r') as file:
+                lines = file.readlines()
+            with open(task_yml, 'w') as file:
+                for line in lines:
+                    if line.lstrip().startswith("init_state"):
+                        # Replace the old line with the new one
+                        indent = len(line) - len(line.lstrip())
+                        file.write(' ' * indent + f"init_state: {init_state}\n")
+                    else:
+                        file.write(line)
+        else:
+            task_params = self.get_params(task_yml)
+            sim_params['init_state'] = task_params['model']['init_state']
 
-        if(args.cuda):
+                    
+        if(cuda):
             device = torch.device('cuda', 0)
         else:
             device = torch.device('cpu') 
@@ -129,9 +177,9 @@ class reacherInterface:
         self.world = World(self.gym, self.sim, self.env_ptr, world_params, w_T_r=self.w_T_r)
 
         # Insantiate controller
-        if args.mode == 'mppi':
+        if mode == 'mppi':
             self.mpc_control = ReacherTask(task_file, robot_file, world_file, self.tensor_args)
-        elif args.mode == 'icem':
+        elif mode == 'icem':
             self.mpc_control = ReacherTaskiCEM(task_file, robot_file, world_file, self.tensor_args)
 
 
@@ -184,7 +232,7 @@ class reacherInterface:
         self.goal_q = np.ravel(self.mpc_control.controller.rollout_fn.goal_ee_quat.cpu().numpy())
 
         self.ee_pose = gymapi.Transform()
-
+        self.ee_error = None
     def is_warmed_up(self):
         if isinstance(self.mpc_control, iCEM):
             return self.mpc_control.warmed_up
@@ -217,7 +265,7 @@ class reacherInterface:
         goal_pose = self.get_goal_pose()
         # This being movable is a problem, we ideally want to just set the base handle, but then we would need to change the joint values
         # TODO: if moving base handle then set joint values to 0
-        # self.gym.set_rigid_transform(self.env_ptr, self.target_base_handle, goal_pose)
+        self.gym.set_rigid_transform(self.env_ptr, self.target_base_handle, goal_pose)
 
     def get_goal_pose(self) -> gymapi.Transform:
         object_pose = gymapi.Transform()
@@ -226,6 +274,7 @@ class reacherInterface:
         g_q = np.ravel(self.mpc_control.controller.rollout_fn.goal_ee_quat.cpu().numpy())
         object_pose.p = gymapi.Vec3(g_pos[0], g_pos[1], g_pos[2])
         object_pose.r = gymapi.Quat(g_q[1], g_q[2], g_q[3], g_q[0])
+        # print(object_pose.p)
 
         object_pose = self.w_T_r * object_pose
         return object_pose
@@ -264,7 +313,7 @@ class reacherInterface:
     def step(self):
         self.gym_instance.step()
         self.update_goal_from_world()
-        self.get_goal_pose()
+        # self.get_goal_pose()
 
         self.t_step += self.sim_dt        
         current_robot_state = copy.deepcopy(self.robot_sim.get_state(self.env_ptr, self.robot_ptr))
@@ -281,17 +330,20 @@ class reacherInterface:
         
         # Critical! This updates self.mpc_control.rollout_fn.link_pos_seq and 
         #                        self.mpc_control.rollout_fn.link_rot_seq
-        ee_error = self.mpc_control.get_current_error(filtered_state_mpc)
-        
-
+        self.ee_error = self.mpc_control.get_current_error(filtered_state_mpc)
+        # print(ee_error)
         pose_state = self.mpc_control.controller.rollout_fn.get_ee_pose(curr_state_tensor)
-        
+        # self.mpc_control.controller.rollout_fn.update_link_poses()
+
         # get current pose:
         e_pos = np.ravel(pose_state['ee_pos_seq'].cpu().numpy())
         e_quat = np.ravel(pose_state['ee_quat_seq'].cpu().numpy())
         self.ee_pose.p = copy.deepcopy(gymapi.Vec3(e_pos[0], e_pos[1], e_pos[2]))
         self.ee_pose.r = gymapi.Quat(e_quat[1], e_quat[2], e_quat[3], e_quat[0])
         
+        log.info(f"time: {self.t_step:0.4f} s")
+        log.info(f"position: {e_pos[0]:0.4f}, {e_pos[1]:0.4f}, {e_pos[2]:0.4f}")
+
         self.ee_pose = copy.deepcopy(self.w_T_r) * copy.deepcopy(self.ee_pose)
         
         if(self.viz_ee_target):
@@ -338,9 +390,6 @@ class reacherInterface:
 
         if self.is_warmed_up():
             self.robot_sim.command_robot_position(self.q_des, self.env_ptr, self.robot_ptr)
-
-
-
 
 
 def mpc_robot_interactive(args, gym_instance):
@@ -509,6 +558,7 @@ def mpc_robot_interactive(args, gym_instance):
     g_q = np.ravel(mpc_control.controller.rollout_fn.goal_ee_quat.cpu().numpy())
 
 
+
     while(i > -100):
         try:
             gym_instance.step()
@@ -632,12 +682,22 @@ if __name__ == '__main__':
     sim_params['headless'] = args.headless
     gym_instance = Gym(**sim_params)
     
-    
+    init1 = [np.pi/180*angle for angle in [90, -90, 150, -150, -90, 0]]
+    init2 = [np.pi/180*angle for angle in [90, -60, 120, -150, -90, 0]]
     if args.mode not in ["mppi", "icem"]:
         raise ValueError("Invalid TrajOpt mode provided")
 
+
     # mpc_robot_interactive(args, gym_instance)
-    mpc_robot_interactive_class = reacherInterface(args, gym_instance)
+    mpc_robot_interactive_class = reacherInterface(gym_instance,
+                                                   robot = args.robot,
+                                                   mode = args.mode,
+                                                   cuda = args.cuda,
+                                                   viz_collision_spheres= args.viz_collision_spheres,
+                                                   viz_ee_target= args.viz_ee_target,
+                                                   init_state=init2
+                                                   )
+    mpc_robot_interactive_class.set_goal(goal_state = [np.pi/180*angle for angle in [-90, -140, -80, -50, 90, 90]] + 6*[0])
     import time
     while True:
         # start = time.time()
